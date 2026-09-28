@@ -51,6 +51,20 @@ func Open(path string) *Store { return &Store{path: path} }
 // Path 返回 vault 文件路径。
 func (s *Store) Path() string { return s.path }
 
+// Revision 返回一个代表 vault 当前内容的标记（文件 mtime + 大小）。
+//
+// 用途：界面靠它判断"有没有别的进程改过 vault" —— 比如 AI 通过 CLI
+// 加了一台服务器、或者另一台机器同步过来。变了就该重新拉一次列表。
+//
+// 不需要加锁：只 stat 文件，不读写内存状态。
+func (s *Store) Revision() string {
+	fi, err := os.Stat(s.path)
+	if err != nil {
+		return ""
+	}
+	return fmt.Sprintf("%d:%d", fi.ModTime().UnixNano(), fi.Size())
+}
+
 // Exists 报告 vault 文件是否存在且非空。
 func (s *Store) Exists() bool {
 	fi, err := os.Stat(s.path)

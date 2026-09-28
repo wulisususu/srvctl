@@ -237,6 +237,19 @@ func (s *Server) setResults(rs map[string]reach.Result) {
 	s.mu.Unlock()
 }
 
+// mergeResults 只更新指定的条目，保留其它服务器的既有状态。
+// 单条重测（界面保存后）用它，避免把整个列表的状态冲成全空。
+func (s *Server) mergeResults(add map[string]reach.Result) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.results == nil {
+		s.results = make(map[string]reach.Result, len(add))
+	}
+	for k, v := range add {
+		s.results[k] = v
+	}
+}
+
 func (s *Server) getResults() map[string]reach.Result {
 	s.mu.RLock()
 	defer s.mu.RUnlock()

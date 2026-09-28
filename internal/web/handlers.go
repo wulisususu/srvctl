@@ -33,15 +33,16 @@ func decodeBody(r *http.Request, v any) error {
 
 // ---------- 状态 ----------
 
-// handlePing 供界面定期探活。
+// handlePing 供界面定期探活与变更检测。
 //
-// 它同时验证了两件事：服务进程还活着，以及页面手里的 token 还有效
-// （token 每次启动都会重新生成）。界面据此在断开时给出明确提示，
-// 而不是让用户对着一句 "Failed to fetch" 猜。
+// 它同时验证三件事：服务进程还活着、页面手里的 token 还有效
+// （token 每次启动都会重新生成）、以及 vault 有没有被别的进程改过
+// （revision 变了就说明 AI 用 CLI 动过，界面该重新拉列表了）。
 func (s *Server) handlePing(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"ok":       true,
 		"unlocked": s.store.Unlocked(),
+		"revision": s.store.Revision(),
 	})
 }
 
@@ -52,6 +53,7 @@ type stateResponse struct {
 	VaultPath  string                  `json:"vault_path"`
 	Portable   bool                    `json:"portable"`
 	SSID       string                  `json:"ssid"`
+	Revision   string                  `json:"revision"`
 	Servers    []model.Server          `json:"servers"`
 	Results    map[string]reach.Result `json:"results"`
 }
@@ -64,6 +66,7 @@ func (s *Server) handleState(w http.ResponseWriter, r *http.Request) {
 		VaultPath:  s.store.Path(),
 		Portable:   s.portable,
 		SSID:       s.getSSID(),
+		Revision:   s.store.Revision(),
 		Servers:    []model.Server{},
 		Results:    s.getResults(),
 	}
@@ -152,16 +155,36 @@ func (s *Server) handleTest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// 可选：只测一条。界面保存后用它，免得改一台就把全部重测一遍。
+	only := r.URL.Query().Get("name")
+	if only != "" {
+		filtered := make([]model.Server, 0, 1)
+		for _, srv := range servers {
+			if srv.Name == only {
+				filtered = append(filtered, srv)
+			}
+		}
+		if len(filtered) == 0 {
+			writeError(w, http.StatusNotFound, "未找到服务器: "+only)
+			return
+		}
+		servers = filtered
+	}
+
 	ssid := netid.SSID()
 	s.setSSID(ssid)
 
-	results := reach.CheckAll(r.Context(), servers, ssid)
-	indexed := reach.Index(results)
-	s.setResults(indexed)
+	indexed := reach.Index(reach.CheckAll(r.Context(), servers, ssid))
+	if only != "" {
+		s.mergeResults(indexed)
+	} else {
+		s.setResults(indexed)
+	}
 
+	// 始终返回完整集合，前端直接整体替换即可
 	writeJSON(w, http.StatusOK, map[string]any{
 		"ssid":    ssid,
-		"results": indexed,
+		"results": s.getResults(),
 	})
 }
 

@@ -8,10 +8,13 @@ const $ = (sel) => document.querySelector(sel);
 
 let S = {
   has_vault: false, unlocked: false, servers: [],
-  results: {}, ssid: '', vault_path: '', remembered: false,
+  results: {}, ssid: '', vault_path: '', remembered: false, revision: '',
 };
 let editingName = null;
 let toastTimer = null;
+/* 上次看到的 vault 版本标记。变了说明有别的进程写过（AI 用 CLI 动了，
+   或者另一台机器同步过来），界面需要重新拉列表。 */
+let lastRevision = '';
 
 /* ───────── 断线检测 ─────────
    浏览器对"请求没拿到任何响应"只会给一句 TypeError: Failed to fetch，
@@ -35,20 +38,44 @@ const OFFLINE_HINT =
   '请重新双击 srvctl-gui.exe，用新打开的页面继续操作。\n' +
   '（每次启动端口和令牌都会重新生成，所以旧标签页无法继续使用）';
 
-/* 定期探活：程序退出或页面过期时主动提示，不用等用户点到保存才发现 */
+/* 定期探活 + 变更检测。
+   - 程序退出 / 令牌失效 → 顶部横幅
+   - vault 被别的进程改过 → 自动重新拉列表并静默重测 */
+let pollBusy = false;
+
 async function pollAlive() {
-  if (document.hidden) return;
+  if (document.hidden || pollBusy) return;
+  pollBusy = true;
   try {
     const res = await fetch('/api/ping', { headers: { 'X-Srvctl-Token': TOKEN } });
-    if (res.ok) {
-      markOnline();
-    } else if (res.status === 403) {
+
+    if (res.status === 403) {
       markOffline('页面令牌已失效 —— 程序可能重启过。');
-    } else {
+      return;
+    }
+    if (!res.ok) {
       markOffline('本地服务返回了异常状态。');
+      return;
+    }
+
+    const p = await res.json();
+    markOnline();
+
+    // 锁定状态在别处变了（比如另一个标签页点了锁定）
+    if (!!p.unlocked !== !!S.unlocked) {
+      await loadState();
+      if (S.unlocked) await runTest({ silent: true });
+      return;
+    }
+
+    // vault 被改过 —— 典型场景：AI 通过 CLI 加了一台服务器
+    if (p.revision && p.revision !== lastRevision) {
+      await refreshFromVault();
     }
   } catch {
     markOffline('本地服务没有响应 —— 程序可能已退出。');
+  } finally {
+    pollBusy = false;
   }
 }
 
@@ -214,6 +241,7 @@ function updateGate() {
 
 async function loadState() {
   S = await api('/api/state');
+  lastRevision = S.revision || '';
   render();
 }
 
@@ -243,29 +271,51 @@ async function submitGate() {
   }
 }
 
-async function runTest() {
+async function runTest(opts = {}) {
   if (!S.unlocked) return;
+
+  // silent: 后台刷新用，不闪按钮、不弹成功提示
+  // only:   只测指定的那一条（保存后用它，免得改一台就全量重测）
+  const silent = opts.silent === true;
+  const only = opts.only || '';
   const btn = $('#btn-test');
-  btn.disabled = true;
-  btn.textContent = '检测中…';
+
+  if (!silent) {
+    btn.disabled = true;
+    btn.textContent = '检测中…';
+  }
   try {
-    const r = await api('/api/test', {});
+    const path = '/api/test' + (only ? '?name=' + encodeURIComponent(only) : '');
+    const r = await api(path, {});
     S.ssid = r.ssid;
     S.results = r.results || {};
     render();
 
-    const all = Object.values(S.results);
-    const ok = all.filter((x) => x.state === 'ok').length;
-    const wrongNet = all.filter((x) => x.state === 'wrong_net').length;
-    let msg = `${ok}/${all.length} 可连接`;
-    if (wrongNet) msg += `，${wrongNet} 台网络环境不满足`;
-    toast('检测完成：' + msg, 'ok');
+    if (!silent) {
+      const all = Object.values(S.results);
+      const ok = all.filter((x) => x.state === 'ok').length;
+      const wrongNet = all.filter((x) => x.state === 'wrong_net').length;
+      let msg = `${ok}/${all.length} 可连接`;
+      if (wrongNet) msg += `，${wrongNet} 台网络环境不满足`;
+      toast('检测完成：' + msg, 'ok');
+    }
   } catch (e) {
-    toast('检测失败：' + e.message, 'error');
+    if (!silent) toast('检测失败：' + e.message, 'error');
+    else markOffline('后台刷新失败：' + e.message);
   } finally {
-    btn.disabled = false;
-    btn.textContent = '重新检测';
+    if (!silent) {
+      btn.disabled = false;
+      btn.textContent = '重新检测';
+    }
   }
+}
+
+/* vault 变了：重拉列表；如果确实变了，再静默测一遍让新条目立刻有状态 */
+async function refreshFromVault() {
+  const before = lastRevision;
+  await loadState();
+  if (lastRevision === before) return; // 没真的变，不白花 2 秒
+  await runTest({ silent: true });
 }
 
 async function copyOne(name) {
@@ -388,6 +438,8 @@ async function saveEditor() {
     $('#editor').close();
     await loadState();
     toast('已保存：' + srv.name, 'ok');
+    // 只重测这一条 —— 改了一台机器没必要把全部重新拨一遍
+    await runTest({ silent: true, only: srv.name });
   } catch (e) {
     errEl.textContent = e.message;
   }
@@ -416,7 +468,7 @@ function wire() {
   });
 
   $('#btn-add').addEventListener('click', () => openEditor(null));
-  $('#btn-test').addEventListener('click', runTest);
+  $('#btn-test').addEventListener('click', () => runTest());
   $('#btn-copy-all').addEventListener('click', copyAll);
   $('#btn-lock').addEventListener('click', lockNow);
   $('#btn-quit').addEventListener('click', quit);
