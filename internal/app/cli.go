@@ -644,12 +644,24 @@ func cmdConfig(g globals, args []string) int {
 
 		if _, err := os.Stat(p); err != nil {
 			fmt.Println()
-			fmt.Println("注意：这个文件目前不存在。")
-			fmt.Println("  · 如果是云盘同步目录 —— 等同步完成")
-			fmt.Println("  · 如果是新位置 —— 用 `" + appName + " init` 在那里创建")
-			fmt.Println()
-			fmt.Println("⚠️  同步还没下来之前，界面会显示「创建 vault」。")
-			fmt.Println("    那时千万别点创建 —— 会覆盖掉已有数据。")
+			dir := filepath.Dir(p)
+			if _, derr := os.Stat(dir); derr != nil {
+				// 这是最容易踩的坑：目录不存在。Windows 的 move / Move-Item
+				// 不会自动建目录，用户会先看到一句莫名其妙的"未能找到路径中的某个部分"。
+				fmt.Printf("⚠️  目录不存在: %s\n", dir)
+				fmt.Println("    先把目录建出来（move 不会自动创建）：")
+				fmt.Println()
+				fmt.Printf("        New-Item -ItemType Directory -Force -Path \"%s\"\n", dir)
+				fmt.Println()
+				fmt.Println("    建完再把现有 vault 移过去，别直接新建 —— 那会丢数据。")
+			} else {
+				fmt.Println("注意：vault 文件目前不存在，但目录是有的。")
+				fmt.Println("  · 如果是云盘同步目录 —— 等同步完成")
+				fmt.Println("  · 如果是新位置 —— 用 `" + appName + " init` 在那里创建")
+				fmt.Println()
+				fmt.Println("⚠️  同步还没下来之前，界面会显示「找不到配置的 vault」。")
+				fmt.Println("    那时别急着新建 —— 会生成空库，同步回去可能覆盖已有数据。")
+			}
 		}
 
 		fmt.Printf("\n本机 session.key 仍在: %s\n", config.SessionKeyPath(g.portable))

@@ -246,24 +246,43 @@ vault 是**一个加密文件**，拷过去就能用 —— 但更省事的是�
 
 **方式 A：云盘共享（推荐，适合 2–3 台常驻机器）**
 
-把 vault 放进 OneDrive / 坚果云等同步目录，然后每台机器指向它：
+把 vault 放进 OneDrive / 坚果云等同步目录，然后每台机器指向它。
+
+**先确认你的云盘目录在哪**（OneDrive 的标准位置在环境变量里）：
 
 ```powershell
-# 两台机器上都执行，路径按各自的实际盘符写
-srvctl config set-vault "D:\OneDrive\srvctl\vault.enc"
+$cloud = $env:OneDrive      # 坚果云的话自己填实际路径，例如 D:\Nutstore
+"$cloud"
+```
 
-# 查看当前生效的位置和来源
-srvctl config
+然后（**这三步缺一不可 —— `Move-Item` 不会自动创建目录**）：
+
+```powershell
+# 1. 建目录
+New-Item -ItemType Directory -Force -Path "$cloud\srvctl" | Out-Null
+
+# 2. 移过去
+Move-Item "$env:APPDATA\srvctl\vault.enc" "$cloud\srvctl\"
+
+# 3. 让程序指向它
+srvctl config set-vault "$cloud\srvctl"
+```
+
+**另一台机器**上只做第 3 步（路径按那台机器的实际盘符写）：
+
+```powershell
+srvctl config set-vault "C:\Users\<你>\OneDrive\srvctl"
+srvctl login        # 输一次同一个主密码
 ```
 
 `config set-vault` 会写进 `%APPDATA%\srvctl\config.json`，所以**双击启动的界面也能读到** ——
-不必依赖命令行参数或环境变量。
-
-每台机器再执行一次 `srvctl login` 输入同一个主密码即可（主密码不会跟着同步，见下）。
+不必依赖命令行参数或环境变量。随时用 `srvctl config` 查看当前生效的位置和来源。
 
 由于写入是「先写临时文件再原子 rename」，云盘冲突最坏结果是多出一个
 `vault-冲突副本.enc`，**不会损坏数据**。程序每次读写前都会检查文件是否被
 外部改过并自动重载，界面也是 4 秒一次探活、发现变化就自动刷新。
+
+> 改完 `config.json` 后需要**重启界面**才会生效（配置在启动时读取一次）。
 
 **方式 B：U 盘便携（适合随身带）**
 
