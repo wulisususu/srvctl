@@ -209,7 +209,10 @@ function render() {
   $('#rows').innerHTML = list.map((s) => `
     <tr>
       <td>${dotFor(s)}</td>
-      <td class="name">${esc(s.name)}</td>
+      <td class="name">
+        <div>${esc(s.name)}</div>
+        ${s.notes ? `<div class="sub" title="${esc(s.notes)}">${esc(s.notes)}</div>` : ''}
+      </td>
       <td class="mono">${esc(s.host)}:${s.port || 22}</td>
       <td>${s.platform === 'windows' ? 'Windows' : 'Linux'}</td>
       <td>${esc(s.category || '')}</td>
@@ -359,6 +362,56 @@ async function quit() {
 
 function formEls() { return $('#form').elements; }
 
+/* ───────── 密码可见性切换 ─────────
+   给页面上每一个 password 输入框自动挂一个小眼睛。
+   用自动挂载而不是逐个写标签，是为了让主密码框、服务器密码框、
+   私钥口令框全都一致 —— 少写一堆重复的 HTML。 */
+
+const EYE_OPEN =
+  '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"' +
+  ' stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+  '<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>' +
+  '<circle cx="12" cy="12" r="3"/></svg>';
+
+const EYE_OFF =
+  '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"' +
+  ' stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+  '<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/>' +
+  '<path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/>' +
+  '<path d="M14.12 14.12a3 3 0 1 1-4.24-4.24"/>' +
+  '<line x1="1" y1="1" x2="23" y2="23"/></svg>';
+
+function addEyeToggles() {
+  document.querySelectorAll('input[type="password"]').forEach((input) => {
+    if (input.dataset.eyeDone) return;
+    input.dataset.eyeDone = '1';
+
+    const wrap = document.createElement('span');
+    wrap.className = 'pw-wrap';
+    input.parentNode.insertBefore(wrap, input);
+    wrap.appendChild(input);
+
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'eye';
+    btn.tabIndex = -1;
+    btn.innerHTML = EYE_OPEN;
+    btn.title = '显示';
+    btn.setAttribute('aria-label', '显示密码');
+
+    btn.addEventListener('click', () => {
+      const show = input.type === 'password';
+      input.type = show ? 'text' : 'password';
+      btn.innerHTML = show ? EYE_OFF : EYE_OPEN;
+      btn.classList.toggle('on', show);
+      btn.title = show ? '隐藏' : '显示';
+      btn.setAttribute('aria-label', show ? '隐藏密码' : '显示密码');
+    });
+
+    wrap.appendChild(btn);
+  });
+}
+
 function syncAuthFields() {
   const mode = formEls()['auth_mode'].value;
   document.querySelectorAll('#form [data-when]').forEach((el) => {
@@ -462,6 +515,8 @@ async function deleteCurrent() {
 /* ───────── 事件绑定 ───────── */
 
 function wire() {
+  addEyeToggles();
+
   $('#gate-go').addEventListener('click', submitGate);
   ['#gate-pw', '#gate-pw2'].forEach((sel) => {
     $(sel).addEventListener('keydown', (e) => { if (e.key === 'Enter') submitGate(); });

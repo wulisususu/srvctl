@@ -114,6 +114,18 @@ func writeMeta(b *strings.Builder, s model.Server, r *reach.Result, currentSSID 
 			b.WriteString("\n")
 		}
 	}
+
+	// 备注单独成块。
+	//
+	// 这是用户为这台机器写的上下文（用途、配置、到期时间、踩过的坑），
+	// 正是 AI 接手前最该知道的东西 —— 混在元信息那一行里会把多行备注
+	// 压成一坨，所以缩进后单独列。
+	if n := strings.TrimSpace(s.Notes); n != "" {
+		b.WriteString("\n备注：\n")
+		for _, ln := range strings.Split(n, "\n") {
+			b.WriteString("    " + strings.TrimRight(ln, "\r") + "\n")
+		}
+	}
 }
 
 // StateLabel 把探测结果转成给人/AI 看的中文描述。

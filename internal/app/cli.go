@@ -388,19 +388,42 @@ func cmdList(g globals, args []string) int {
 	}
 
 	if *asJSON {
-		out := make([]map[string]any, 0, len(servers))
+		// 刻意用白名单而不是直接序列化 model.Server —— 列表接口绝不能把
+		// 密码/私钥带出去。代价是新增非敏感字段时要记得加进来
+		// （notes 就漏过一次，导致 list --json 看不到备注）。
+		type listItem struct {
+			Name         string   `json:"name"`
+			Host         string   `json:"host"`
+			Port         int      `json:"port"`
+			Platform     string   `json:"platform"`
+			Username     string   `json:"username"`
+			AuthMode     string   `json:"auth_mode"`
+			Category     string   `json:"category"`
+			Tags         []string `json:"tags"`
+			RequiredSSID string   `json:"required_ssid"`
+			CheckMode    string   `json:"check_mode"`
+			Notes        string   `json:"notes,omitempty"`
+			State        string   `json:"state,omitempty"`
+			LatencyMs    int64    `json:"latency_ms,omitempty"`
+			Err          string   `json:"err,omitempty"`
+			Note         string   `json:"note,omitempty"`
+		}
+		out := make([]listItem, 0, len(servers))
 		for _, s := range servers {
-			item := map[string]any{
-				"name": s.Name, "host": s.Host, "port": s.EffectivePort(),
-				"platform": s.Platform, "username": s.Username,
-				"category": s.Category, "tags": s.Tags,
-				"required_ssid": s.RequiredSSID, "check_mode": s.CheckMode,
+			it := listItem{
+				Name: s.Name, Host: s.Host, Port: s.EffectivePort(),
+				Platform: s.Platform, Username: s.Username, AuthMode: s.AuthMode,
+				Category: s.Category, Tags: s.Tags,
+				RequiredSSID: s.RequiredSSID, CheckMode: s.CheckMode,
+				Notes: s.Notes,
 			}
 			if r, ok := results[s.Name]; ok {
-				item["state"] = r.State
-				item["latency_ms"] = r.LatencyMs
+				it.State = string(r.State)
+				it.LatencyMs = r.LatencyMs
+				it.Err = r.Err
+				it.Note = r.Note
 			}
-			out = append(out, item)
+			out = append(out, it)
 		}
 		printJSON(out)
 		return 0
