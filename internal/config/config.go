@@ -7,6 +7,7 @@
 package config
 
 import (
+	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -56,13 +57,88 @@ func ExeDir() string {
 	return filepath.Dir(exe)
 }
 
+// ---------- 持久化配置 ----------
+
+// FileConfig 是存在 DataDir()/config.json 的用户配置。
+//
+// 存在的理由：双击启动的 GUI 拿不到命令行参数，所以必须有个地方能持久地
+// 记住"vault 放在哪"。否则「把 vault 放进云盘目录，多台机器共用」这条路
+// 根本走不通 —— 每次都得靠 --vault 或环境变量，而双击时两者都没有。
+type FileConfig struct {
+	// VaultPath 显式指定的 vault 位置；空表示用默认位置。
+	VaultPath string `json:"vault_path,omitempty"`
+}
+
+// ConfigPath 返回配置文件路径。
+//
+// 它永远在本地数据目录，**不跟着 vault 走** —— vault 可能是共享的，
+// 但"共享目录挂在哪"这件事每台机器本来就不同。
+func ConfigPath() string {
+	return filepath.Join(DataDir(), "config.json")
+}
+
+// ReadConfig 读取配置。文件不存在或内容损坏时返回零值且不报错 ——
+// 一个坏掉的配置文件不该让程序完全起不来。
+func ReadConfig() FileConfig {
+	var c FileConfig
+	raw, err := os.ReadFile(ConfigPath())
+	if err != nil {
+		return c
+	}
+	_ = json.Unmarshal(raw, &c)
+	return c
+}
+
+// WriteConfig 覆盖写入配置。
+func WriteConfig(c FileConfig) error {
+	if err := os.MkdirAll(DataDir(), 0o700); err != nil {
+		return err
+	}
+	raw, err := json.MarshalIndent(c, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(ConfigPath(), append(raw, '\n'), 0o600)
+}
+
+// VaultSource 说明当前 vault 路径由什么决定，供 `srvctl config` 展示。
+func VaultSource(portable bool) string {
+	switch {
+	case os.Getenv("SRVCTL_VAULT") != "":
+		return "环境变量 SRVCTL_VAULT"
+	case portable:
+		return "便携模式（可执行文件同目录）"
+	case ReadConfig().VaultPath != "":
+		return "配置文件 " + ConfigPath()
+	default:
+		return "默认位置"
+	}
+}
+
+// VaultIsConfigured 报告 vault 路径是不是被显式指定的（而不是用默认位置）。
+//
+// 界面靠它区分两种"没有 vault"：真的第一次用（该引导创建），
+// 还是配置了一个还没同步下来的路径（该警告 —— 这时创建会覆盖别人的数据）。
+func VaultIsConfigured(portable bool) bool {
+	if os.Getenv("SRVCTL_VAULT") != "" {
+		return true
+	}
+	return !portable && ReadConfig().VaultPath != ""
+}
+
 // VaultPath 解析 vault 文件位置。
+//
+// 优先级：环境变量 > 便携模式 > 配置文件 > 默认位置。
+// 前两个都是"这一次运行"的显式意图，所以排在持久配置前面。
 func VaultPath(portable bool) string {
 	if p := os.Getenv("SRVCTL_VAULT"); p != "" {
 		return p
 	}
 	if portable {
 		return filepath.Join(ExeDir(), "vault.enc")
+	}
+	if p := ReadConfig().VaultPath; p != "" {
+		return p
 	}
 	return filepath.Join(DataDir(), "vault.enc")
 }

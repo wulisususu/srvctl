@@ -213,15 +213,89 @@ Windows 条目目前**只记录、不检测**（`check_mode: none`），这是�
 | 界面服务 | 只监听 `127.0.0.1`，带随机 token | 本机其他进程拿不到 token 就读不到凭据 |
 | 多机同步 | 各自独立 vault | 见下 |
 
-**多机同步**：默认每台机器一个独立 vault。想在两三台之间共享，把 vault 放到
-云盘目录（OneDrive / 坚果云）并统一指向它：
+**多机共用**：见下面「部署到另一台电脑」一节。
+
+---
+
+## 部署到另一台电脑
+
+需要带过去的东西只有两样：**程序** 和 **vault 文件**。
+
+### 一、程序（约 16 MB，零运行时依赖）
 
 ```powershell
-srvctl --vault "D:\OneDrive\srvctl\vault.enc" add ...
+# 在主力机上构建
+.\build.ps1
 ```
 
-由于写入是原子 rename，云盘冲突最坏结果是多出一个"冲突副本"文件，不会损坏数据。
-程序每次修改前会检查文件是否被外部改过并自动重载。
+把 `dist\` 里的文件拷到另一台机器即可。**不需要装 Go、Node、.NET 或 OpenSSH** ——
+Go 编译出的原生二进制，静态链接，`CGO_ENABLED=0`。
+
+或者在那台机器上从源码构建：
+
+```powershell
+git clone git@github.com:wulisususu/srvctl.git
+cd srvctl
+.\build.ps1
+.\install.ps1     # 装到 %LOCALAPPDATA%\srvctl 并加入 PATH
+```
+
+### 二、vault（服务器数据）
+
+vault 是**一个加密文件**，拷过去就能用 —— 但更省事的是让它自动同步。
+
+**方式 A：云盘共享（推荐，适合 2–3 台常驻机器）**
+
+把 vault 放进 OneDrive / 坚果云等同步目录，然后每台机器指向它：
+
+```powershell
+# 两台机器上都执行，路径按各自的实际盘符写
+srvctl config set-vault "D:\OneDrive\srvctl\vault.enc"
+
+# 查看当前生效的位置和来源
+srvctl config
+```
+
+`config set-vault` 会写进 `%APPDATA%\srvctl\config.json`，所以**双击启动的界面也能读到** ——
+不必依赖命令行参数或环境变量。
+
+每台机器再执行一次 `srvctl login` 输入同一个主密码即可（主密码不会跟着同步，见下）。
+
+由于写入是「先写临时文件再原子 rename」，云盘冲突最坏结果是多出一个
+`vault-冲突副本.enc`，**不会损坏数据**。程序每次读写前都会检查文件是否被
+外部改过并自动重载，界面也是 4 秒一次探活、发现变化就自动刷新。
+
+**方式 B：U 盘便携（适合随身带）**
+
+把 `srvctl.exe`、`srvctl-gui.exe`、`vault.enc`、`session.key` 一起放进 U 盘，
+用 `--portable` 启动，数据就在 exe 同目录：
+
+```powershell
+srvctl.exe --portable list
+```
+
+或者给 U 盘上的 `srvctl-gui.exe` 建个快捷方式，目标写：
+
+```
+D:\srvctl-gui.exe --portable
+```
+
+**方式 C：手动拷贝** —— 直接把 `vault.enc` 复制过去。数据变动不频繁的话完全够用。
+
+### ⚠️ 一条硬规矩：`session.key` 不要放进云盘
+
+| 文件 | 内容 | 能进云盘吗 |
+|---|---|---|
+| `vault.enc` | 服务器信息 + 凭据，**AES-256-GCM 加密** | ✅ 可以 |
+| `session.key` | **主密码明文** | ❌ **绝对不要** |
+
+`session.key` 是 `srvctl login` 写下的，为了让 AI 能无交互调用 CLI。它在你本机
+`%APPDATA%\srvctl\` 下，**不要**把它复制到共享目录 —— 那等于把主密码明文交出去，
+vault 的加密就白做了。
+
+正确做法：vault 放云盘，`session.key` 留在各机器本地，每台 `srvctl login` 一次。
+
+`config` 命令会在检测到这种危险布局时给出警告。
 
 ### AI 读不到密码吗
 

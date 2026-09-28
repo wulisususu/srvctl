@@ -297,13 +297,29 @@ function render() {
 
 function updateGate() {
   const fresh = !S.has_vault;
-  $('#gate-title').textContent = fresh ? '创建 vault' : '解锁';
-  $('#gate-hint').textContent = fresh
-    ? '第一次运行。请设置一个主密码 —— 所有服务器信息会用 AES-256-GCM 加密后保存在本地文件里。'
-    : '输入主密码以解锁。';
+
+  // 配置了 vault 路径（比如云盘共享目录）但文件不在 —— 多半是同步还没下来。
+  // 这时绝不能顺手引导用户"创建"：新建的是一个空库，同步回去有可能
+  // 覆盖掉别的机器上的数据。
+  const sharedMissing = fresh && !!S.vault_configured;
+
+  if (sharedMissing) {
+    $('#gate-title').textContent = '找不到配置的 vault';
+    $('#gate-hint').textContent =
+      '这个路径下暂时没有 vault 文件。\n\n' +
+      '如果它在云盘目录里，通常是同步还没完成 —— 稍等一会儿再打开本页。\n\n' +
+      '⚠️ 请不要在这里新建：那会生成一个空库，同步回去有可能覆盖掉已有数据。';
+    $('#gate-go').textContent = '仍要在此新建';
+  } else {
+    $('#gate-title').textContent = fresh ? '创建 vault' : '解锁';
+    $('#gate-hint').textContent = fresh
+      ? '第一次运行。请设置一个主密码 —— 所有服务器信息会用 AES-256-GCM 加密后保存在本地文件里。'
+      : '输入主密码以解锁。';
+    $('#gate-go').textContent = fresh ? '创建' : '解锁';
+  }
+
   $('#gate-pw2').classList.toggle('hidden', !fresh);
   $('#gate-remember-wrap').classList.toggle('hidden', false);
-  $('#gate-go').textContent = fresh ? '创建' : '解锁';
   $('#gate-path').textContent = 'vault 位置：' + (S.vault_path || '');
 }
 
@@ -325,6 +341,16 @@ async function submitGate() {
 
   if (!pw) { errEl.textContent = '请输入主密码'; return; }
   if (fresh && pw !== pw2) { errEl.textContent = '两次输入不一致'; return; }
+
+  // 配置的共享 vault 不存在时，再确认一次 —— 这个操作有可能覆盖别人的数据
+  if (fresh && S.vault_configured) {
+    const ok = confirm(
+      '这里配置的是一个共享位置的 vault，但文件不存在。\n\n' +
+      '现在新建会生成一个空库。如果它同步回其它机器，可能覆盖已有服务器数据。\n\n' +
+      '确定要新建吗？'
+    );
+    if (!ok) return;
+  }
 
   const btn = $('#gate-go');
   btn.disabled = true;

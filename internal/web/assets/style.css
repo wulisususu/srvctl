@@ -51,7 +51,8 @@ body {
   background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
 }
 .card h1 { margin: 0 0 6px; font-size: 20px; }
-.card > p { margin: 0 0 18px; font-size: 13px; }
+/* pre-line：解锁页的提示里带换行（共享 vault 缺失时的警告），要按原样显示 */
+.card > p { margin: 0 0 18px; font-size: 13px; white-space: pre-line; line-height: 1.6; }
 .card input[type=password] { width: 100%; }
 .card .pw-wrap { margin-bottom: 10px; }
 .check {

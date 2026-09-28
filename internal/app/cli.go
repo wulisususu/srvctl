@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"srvctl/internal/config"
@@ -51,6 +52,8 @@ func Run(args []string) int {
 		return cmdTest(g, cmdArgs)
 	case "net", "ssid":
 		return cmdNet()
+	case "config", "cfg":
+		return cmdConfig(g, cmdArgs)
 	case "snippet", "copy":
 		return cmdSnippet(g, cmdArgs)
 	case "exec", "run":
@@ -98,6 +101,11 @@ vault：
 网络与连通性：
     net                 显示当前 WiFi 名称
     test [名称...]      做 TCP 连通性检测（不指定名称则检测全部）
+
+配置：
+    config                      显示 vault / session.key / 日志等路径
+    config set-vault <路径>      把 vault 指到别处（例如云盘目录，多机共用）
+    config clear-vault          恢复默认位置
 
 给 AI 用：
     snippet [名称]      输出"复制给 AI"的连接说明
@@ -601,6 +609,94 @@ func cmdTest(g globals, args []string) int {
 			padRight(s.Name, 22), padRight(s.Address(), 22), snippet.StateLabel(r))
 	}
 	fmt.Printf("\n共 %d 条，其中 %d 条不可连接\n", len(servers), bad)
+	return 0
+}
+
+// ---------- 配置 ----------
+
+func cmdConfig(g globals, args []string) int {
+	if len(args) == 0 {
+		return showConfig(g)
+	}
+
+	switch args[0] {
+	case "set-vault":
+		if len(args) < 2 {
+			fmt.Fprintln(os.Stderr, "用法: srvctl config set-vault <vault 文件或目录>")
+			return 2
+		}
+		p := args[1]
+		if abs, err := filepath.Abs(p); err == nil {
+			p = abs
+		}
+		// 给目录就自动补上文件名，省得记
+		if filepath.Ext(p) == "" {
+			p = filepath.Join(p, "vault.enc")
+		}
+
+		cfg := config.ReadConfig()
+		cfg.VaultPath = p
+		if err := config.WriteConfig(cfg); err != nil {
+			fmt.Fprintf(os.Stderr, "%s: 写入配置失败: %v\n", appName, err)
+			return 1
+		}
+		fmt.Printf("已设置 vault 位置: %s\n", p)
+
+		if _, err := os.Stat(p); err != nil {
+			fmt.Println()
+			fmt.Println("注意：这个文件目前不存在。")
+			fmt.Println("  · 如果是云盘同步目录 —— 等同步完成")
+			fmt.Println("  · 如果是新位置 —— 用 `" + appName + " init` 在那里创建")
+			fmt.Println()
+			fmt.Println("⚠️  同步还没下来之前，界面会显示「创建 vault」。")
+			fmt.Println("    那时千万别点创建 —— 会覆盖掉已有数据。")
+		}
+
+		fmt.Printf("\n本机 session.key 仍在: %s\n", config.SessionKeyPath(g.portable))
+		fmt.Println("（它存的是主密码明文，不要放进云盘目录 —— 每台机器各自 login 一次）")
+		return 0
+
+	case "clear-vault":
+		cfg := config.ReadConfig()
+		cfg.VaultPath = ""
+		if err := config.WriteConfig(cfg); err != nil {
+			fmt.Fprintf(os.Stderr, "%s: %v\n", appName, err)
+			return 1
+		}
+		fmt.Printf("已恢复默认位置: %s\n", config.VaultPath(g.portable))
+		return 0
+
+	default:
+		fmt.Fprintf(os.Stderr, "%s: config 的子命令只有 set-vault / clear-vault\n", appName)
+		return 2
+	}
+}
+
+func showConfig(g globals) int {
+	vaultPath := config.VaultPath(g.portable)
+	keyPath := config.SessionKeyPath(g.portable)
+
+	fmt.Printf("vault:         %s\n", vaultPath)
+	fmt.Printf("  来源:        %s\n", config.VaultSource(g.portable))
+	if _, err := os.Stat(vaultPath); err != nil {
+		fmt.Printf("  状态:        文件不存在\n")
+	} else {
+		fmt.Printf("  状态:        存在\n")
+	}
+	fmt.Printf("session.key:   %s\n", keyPath)
+	fmt.Printf("日志:          %s\n", config.LogPath(g.portable))
+	fmt.Printf("配置文件:      %s\n", config.ConfigPath())
+	fmt.Printf("CLI 调用名:    %s\n", config.CLICommand())
+
+	// session.key 存的是主密码明文。默认状态下它和 vault 同在本地数据目录，
+	// 这是正常的；只有当 vault 被显式指到别处（多半是云盘）而 session.key
+	// 还跟着一起在那边时，才是真的把主密码明文同步出去了。
+	if config.VaultIsConfigured(g.portable) && filepath.Dir(keyPath) == filepath.Dir(vaultPath) {
+		fmt.Println()
+		fmt.Println("⚠️  session.key 和 vault 在同一个目录，而这个 vault 位置是你指定的。")
+		fmt.Println("    如果这个目录在云盘里，等于把主密码明文同步了出去。")
+		fmt.Println("    建议：让 session.key 留在本地数据目录，每台机器各自 login 一次。")
+	}
 	return 0
 }
 

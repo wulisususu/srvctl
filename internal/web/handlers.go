@@ -47,28 +47,33 @@ func (s *Server) handlePing(w http.ResponseWriter, r *http.Request) {
 }
 
 type stateResponse struct {
-	HasVault   bool                    `json:"has_vault"`
-	Unlocked   bool                    `json:"unlocked"`
-	Remembered bool                    `json:"remembered"`
-	VaultPath  string                  `json:"vault_path"`
-	Portable   bool                    `json:"portable"`
-	SSID       string                  `json:"ssid"`
-	Revision   string                  `json:"revision"`
-	Servers    []model.Server          `json:"servers"`
-	Results    map[string]reach.Result `json:"results"`
+	HasVault   bool   `json:"has_vault"`
+	Unlocked   bool   `json:"unlocked"`
+	Remembered bool   `json:"remembered"`
+	VaultPath  string `json:"vault_path"`
+	// VaultConfigured 为 true 表示 vault 路径是被显式指定的（配置文件或
+	// 环境变量），而不是默认位置。界面据此区分"第一次用"和"配了个还没
+	// 同步下来的共享目录" —— 后者绝不能引导用户去创建，那会覆盖数据。
+	VaultConfigured bool                    `json:"vault_configured"`
+	Portable        bool                    `json:"portable"`
+	SSID            string                  `json:"ssid"`
+	Revision        string                  `json:"revision"`
+	Servers         []model.Server          `json:"servers"`
+	Results         map[string]reach.Result `json:"results"`
 }
 
 func (s *Server) handleState(w http.ResponseWriter, r *http.Request) {
 	resp := stateResponse{
-		HasVault:   s.store.Exists(),
-		Unlocked:   s.store.Unlocked(),
-		Remembered: sessionkey.Exists(config.SessionKeyPath(s.portable)),
-		VaultPath:  s.store.Path(),
-		Portable:   s.portable,
-		SSID:       s.getSSID(),
-		Revision:   s.store.Revision(),
-		Servers:    []model.Server{},
-		Results:    s.getResults(),
+		HasVault:        s.store.Exists(),
+		Unlocked:        s.store.Unlocked(),
+		Remembered:      sessionkey.Exists(config.SessionKeyPath(s.portable)),
+		VaultPath:       s.store.Path(),
+		VaultConfigured: config.VaultIsConfigured(s.portable),
+		Portable:        s.portable,
+		SSID:            s.getSSID(),
+		Revision:        s.store.Revision(),
+		Servers:         []model.Server{},
+		Results:         s.getResults(),
 	}
 	if resp.Unlocked {
 		servers, err := s.store.List()
