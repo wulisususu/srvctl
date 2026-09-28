@@ -15,7 +15,14 @@ import (
 )
 
 // For 生成单条服务器的连接说明。
-func For(s model.Server, r *reach.Result, currentSSID string) string {
+//
+// cmd 是调用 srvctl 的方式（见 config.CLICommand）：
+// 通常就是裸命令名 "srvctl"，但如果它不在 PATH 上，会是完整路径。
+// 空字符串按 "srvctl" 处理。
+func For(s model.Server, r *reach.Result, currentSSID, cmd string) string {
+	cmd = normalizeCmd(cmd)
+	onPath := cmd == "srvctl"
+
 	var b strings.Builder
 
 	platform := "Linux"
@@ -27,12 +34,21 @@ func For(s model.Server, r *reach.Result, currentSSID string) string {
 		fmt.Fprintf(&b, "服务器 %s（%s，%s）已登记在 srvctl（仅登记，不检测连通性）。\n\n",
 			s.Name, platform, s.Host)
 		fmt.Fprintf(&b, "远程桌面：\n    mstsc /v:%s\n\n", s.Host)
-		fmt.Fprintf(&b, "如果该机已启用 OpenSSH Server，也可以用：\n    srvctl exec %s \"<PowerShell 命令>\"\n", s.Name)
+		fmt.Fprintf(&b, "如果该机已启用 OpenSSH Server，也可以用：\n    %s exec %s \"<PowerShell 命令>\"\n",
+			cmd, s.Name)
 	} else {
 		fmt.Fprintf(&b, "服务器 %s（%s，%s）已登记在 srvctl。\n\n",
 			s.Name, platform, s.Address())
-		fmt.Fprintf(&b, "执行命令：\n    srvctl exec %s \"<命令>\"\n\n", s.Name)
-		fmt.Fprintf(&b, "交互式会话：\n    srvctl shell %s\n\n", s.Name)
+
+		// srvctl 不在 PATH 上时必须点明，否则 AI 看到一长串路径会
+		// 以为可以简化成 `srvctl`，一试就是 command not found。
+		if onPath {
+			fmt.Fprintf(&b, "执行命令：\n    %s exec %s \"<命令>\"\n\n", cmd, s.Name)
+		} else {
+			fmt.Fprintf(&b, "执行命令（srvctl 未加入 PATH，请照抄下面的完整路径，不要简写成 srvctl）：\n")
+			fmt.Fprintf(&b, "    %s exec %s \"<命令>\"\n\n", cmd, s.Name)
+		}
+		fmt.Fprintf(&b, "交互式会话：\n    %s shell %s\n\n", cmd, s.Name)
 		b.WriteString("凭据由 srvctl 管理，不需要也不应该向我索要密码或私钥。\n")
 	}
 
@@ -40,8 +56,18 @@ func For(s model.Server, r *reach.Result, currentSSID string) string {
 	return b.String()
 }
 
+// normalizeCmd 兜底：空字符串或纯空白都按裸命令名处理。
+func normalizeCmd(cmd string) string {
+	if strings.TrimSpace(cmd) == "" {
+		return "srvctl"
+	}
+	return cmd
+}
+
 // ForAll 生成全部服务器的索引（一次性贴给 AI，让它自己挑）。
-func ForAll(servers []model.Server, results map[string]reach.Result, currentSSID string) string {
+func ForAll(servers []model.Server, results map[string]reach.Result, currentSSID, cmd string) string {
+	cmd = normalizeCmd(cmd)
+
 	sorted := append([]model.Server(nil), servers...)
 	sort.Slice(sorted, func(i, j int) bool {
 		if sorted[i].Category != sorted[j].Category {
@@ -52,7 +78,10 @@ func ForAll(servers []model.Server, results map[string]reach.Result, currentSSID
 
 	var b strings.Builder
 	fmt.Fprintf(&b, "以下 %d 台服务器已登记在 srvctl（当前网络：%s）。\n", len(sorted), displaySSID(currentSSID))
-	b.WriteString("用 `srvctl exec <名称> \"<命令>\"` 执行命令，`srvctl shell <名称>` 开交互式会话。\n")
+	fmt.Fprintf(&b, "用 `%s exec <名称> \"<命令>\"` 执行命令，`%s shell <名称>` 开交互式会话。\n", cmd, cmd)
+	if cmd != "srvctl" {
+		fmt.Fprintf(&b, "（srvctl 未加入 PATH，必须使用上面的完整路径。）\n")
+	}
 	b.WriteString("凭据由 srvctl 管理，不需要也不应该向我索要密码或私钥。\n\n")
 
 	lastCat := "\x00"

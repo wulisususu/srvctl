@@ -8,11 +8,16 @@ package config
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 )
 
-const appDirName = "srvctl"
+const (
+	appDirName = "srvctl"
+	appName    = "srvctl"
+)
 
 // DataDir 返回应用数据目录。
 //
@@ -77,4 +82,43 @@ func LogPath(portable bool) string {
 		return filepath.Join(ExeDir(), "srvctl.log")
 	}
 	return filepath.Join(DataDir(), "srvctl.log")
+}
+
+// CLICommand 返回"给 AI / 脚本用的 srvctl 调用方式"。
+//
+// 优先返回裸命令名 srvctl —— 前提是它确实能在 PATH 上找到。
+// 找不到就退回完整路径（当前可执行文件旁边的 srvctl[.exe]）。
+//
+// 为什么必须这么做：生成给 AI 的说明里如果写了一个跑不起来的命令，
+// AI 只会得到 "command not found"，然后开始自己猜怎么连服务器 ——
+// 那正是这个工具要避免的事。宁可路径长一点，也要保证能跑。
+func CLICommand() string {
+	if _, err := exec.LookPath(appName); err == nil {
+		return appName
+	}
+
+	exe, err := os.Executable()
+	if err != nil {
+		return appName
+	}
+	name := appName
+	if runtime.GOOS == "windows" {
+		name += ".exe"
+	}
+	cand := filepath.Join(filepath.Dir(exe), name)
+	if _, err := os.Stat(cand); err != nil {
+		return appName
+	}
+
+	// 路径含空格时必须加引号，否则 AI 拼出来的命令会断成两截
+	if strings.ContainsAny(cand, " \t") {
+		return `"` + cand + `"`
+	}
+	return cand
+}
+
+// CLICommandIsOnPath 报告 CLICommand() 返回的是裸命令名还是完整路径。
+// 用于在说明文本里解释"为什么这里是个长路径"。
+func CLICommandIsOnPath() bool {
+	return CLICommand() == appName
 }

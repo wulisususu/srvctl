@@ -185,6 +185,63 @@ function asArray(v) {
   return Array.isArray(v) ? v : [];
 }
 
+/* ───────── 分类下拉 ─────────
+   候选 = 内置常用值 + 你已经用过的所有分类 + 「＋ 自定义…」
+
+   为什么用 <select> 而不是 <input list="...">（datalist）：
+   datalist 在不少浏览器里要等你开始打字才显示候选，外观又和普通文本框
+   一模一样，用户会以为这里没得选 —— 这正是用户反馈的问题。
+   select 有原生下拉箭头，一眼就知道能点。自定义需求用额外一个输入框兜住，
+   所以既好发现又不失灵活。 */
+const DEFAULT_CATEGORIES = ['公网', '内网', '测试', '生产'];
+const CAT_CUSTOM = '__custom__';
+let lastCategoryKey = '';
+
+function categoryOptions() {
+  const used = asArray(S.servers)
+    .map((s) => (s.category || '').trim())
+    .filter(Boolean);
+  return [...new Set([...used, ...DEFAULT_CATEGORIES])]
+    .sort((a, b) => a.localeCompare(b, 'zh'));
+}
+
+function updateCategoryList() {
+  const sel = document.getElementById('cat-pick');
+  if (!sel) return;
+
+  const opts = categoryOptions();
+  const key = opts.join('\u0000');
+  if (key === lastCategoryKey) return; // 没变就别重建，免得把用户正在选的项冲掉
+  lastCategoryKey = key;
+
+  const keep = sel.value;
+  sel.innerHTML =
+    '<option value="">（不填）</option>' +
+    opts.map((c) => `<option value="${esc(c)}">${esc(c)}</option>`).join('') +
+    `<option value="${CAT_CUSTOM}">＋ 自定义…</option>`;
+
+  const valid = keep === CAT_CUSTOM || opts.includes(keep);
+  sel.value = valid ? keep : '';
+}
+
+/* 选中「自定义」时才露出输入框 */
+function syncCategoryFields() {
+  const sel = document.getElementById('cat-pick');
+  const wrap = document.getElementById('cat-custom-wrap');
+  if (!sel || !wrap) return;
+  wrap.classList.toggle('hidden', sel.value !== CAT_CUSTOM);
+}
+
+/* 文本框中填了内容就优先用它，否则用下拉选中的值 */
+function currentCategory() {
+  const sel = document.getElementById('cat-pick');
+  if (!sel) return '';
+  if (sel.value === CAT_CUSTOM) {
+    return document.getElementById('cat-custom').value.trim();
+  }
+  return sel.value;
+}
+
 /* ───────── 渲染 ───────── */
 
 function render() {
@@ -198,6 +255,8 @@ function render() {
   $('#gate').classList.add('hidden');
   $('#main').classList.remove('hidden');
   $('#ssid').textContent = S.ssid || '未知（有线或无 WLAN 网卡）';
+
+  updateCategoryList();
 
   const list = asArray(S.servers).slice().sort((a, b) => {
     const c = (a.category || '').localeCompare(b.category || '', 'zh');
@@ -437,7 +496,23 @@ function openEditor(name) {
   el['password'].value = srv ? (srv.password || '') : '';
   el['private_key'].value = srv ? (srv.private_key || '') : '';
   el['passphrase'].value = srv ? (srv.passphrase || '') : '';
-  el['category'].value = srv ? (srv.category || '') : '';
+  // 分类：能匹配到候选就直接选中，否则走「自定义」
+  const cat = (srv ? (srv.category || '') : '').trim();
+  const catOpts = categoryOptions();
+  const pick = document.getElementById('cat-pick');
+  const catCustom = document.getElementById('cat-custom');
+  if (cat && catOpts.includes(cat)) {
+    pick.value = cat;
+    catCustom.value = '';
+  } else if (cat) {
+    pick.value = CAT_CUSTOM;
+    catCustom.value = cat;
+  } else {
+    pick.value = '';
+    catCustom.value = '';
+  }
+  syncCategoryFields();
+
   el['tags'].value = srv ? (srv.tags || []).join(', ') : '';
   el['required_ssid'].value = srv ? (srv.required_ssid || '') : '';
   el['check_mode'].value = srv
@@ -462,7 +537,7 @@ function collect() {
     password: el['password'].value,
     private_key: el['private_key'].value,
     passphrase: el['passphrase'].value,
-    category: el['category'].value.trim(),
+    category: currentCategory(),
     tags: el['tags'].value.split(',').map((x) => x.trim()).filter(Boolean),
     required_ssid: el['required_ssid'].value.trim(),
     check_mode: el['check_mode'].value,
@@ -540,6 +615,15 @@ function wire() {
   $('#ed-delete').addEventListener('click', deleteCurrent);
   $('#form').addEventListener('submit', (e) => e.preventDefault());
   formEls()['auth_mode'].addEventListener('change', syncAuthFields);
+
+  document.getElementById('cat-pick').addEventListener('change', (e) => {
+    syncCategoryFields();
+    // 只有用户主动选「自定义」时才抢焦点 —— openEditor 里也会调用
+    // syncCategoryFields，那时该聚焦的是名称框。
+    if (e.target.value === CAT_CUSTOM) {
+      document.getElementById('cat-custom').focus();
+    }
+  });
 
   // 新增时切换平台自动带出默认检测策略；编辑时不覆盖用户的选择
   formEls()['platform'].addEventListener('change', (e) => {

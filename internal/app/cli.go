@@ -623,7 +623,7 @@ func cmdSnippet(g globals, args []string) int {
 	if len(args) == 0 {
 		// 索引模式：给结果里带上状态，所以顺手做一次探测
 		results := reach.Index(reach.CheckAll(context.Background(), servers, ssid))
-		fmt.Print(snippet.ForAll(servers, results, ssid))
+		fmt.Print(snippet.ForAll(servers, results, ssid, config.CLICommand()))
 		return 0
 	}
 
@@ -637,7 +637,7 @@ func cmdSnippet(g globals, args []string) int {
 			r := reach.Check(context.Background(), s, ssid)
 			ptr = &r
 		}
-		fmt.Print(snippet.For(s, ptr, ssid))
+		fmt.Print(snippet.For(s, ptr, ssid, config.CLICommand()))
 		return 0
 	}
 	fmt.Fprintf(os.Stderr, "%s: 未找到服务器: %s\n", appName, name)

@@ -103,8 +103,13 @@
       <label class="full" data-when="key">私钥<textarea name="private_key" rows="4" spellcheck="false" placeholder="-----BEGIN OPENSSH PRIVATE KEY-----"></textarea></label>
       <label data-when="key">私钥口令<input name="passphrase" type="password" autocomplete="new-password"></label>
 
-      <label>分类<input name="category" placeholder="内网/数据库"></label>
+      <label>分类
+        <select name="category_pick" id="cat-pick"></select>
+      </label>
       <label>标签<input name="tags" placeholder="逗号分隔"></label>
+      <label id="cat-custom-wrap" class="hidden">新分类名
+        <input name="category" id="cat-custom" placeholder="保存后即成为可选项">
+      </label>
       <label>需要 WiFi<input name="required_ssid" placeholder="留空 = 不限网络"></label>
       <label>检测策略
         <select name="check_mode">

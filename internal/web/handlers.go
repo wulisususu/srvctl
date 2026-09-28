@@ -256,7 +256,7 @@ func (s *Server) handleSnippet(w http.ResponseWriter, r *http.Request) {
 
 	if name == "" {
 		writeJSON(w, http.StatusOK, map[string]any{
-			"text": snippet.ForAll(servers, results, ssid),
+			"text": snippet.ForAll(servers, results, ssid, config.CLICommand()),
 		})
 		return
 	}
@@ -270,7 +270,7 @@ func (s *Server) handleSnippet(w http.ResponseWriter, r *http.Request) {
 			ptr = &v
 		}
 		writeJSON(w, http.StatusOK, map[string]any{
-			"text": snippet.For(srv, ptr, ssid),
+			"text": snippet.For(srv, ptr, ssid, config.CLICommand()),
 		})
 		return
 	}
