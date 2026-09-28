@@ -1,0 +1,12 @@
+# 构建产物
+/dist/
+
+# 运行时数据（不应该进版本库）
+vault.enc
+vault.enc.tmp
+session.key
+*.log
+
+# Go
+*.test
+*.out

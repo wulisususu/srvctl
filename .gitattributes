@@ -1,0 +1,13 @@
+# 默认按文本处理，仓库内统一 LF
+* text=auto eol=lf
+
+# Windows 脚本用 CRLF（PowerShell 5.1 对 CRLF 更友好）
+*.ps1 text eol=crlf
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# 二进制，不做任何转换
+*.exe binary
+*.dll binary
+*.png binary
+*.ico binary

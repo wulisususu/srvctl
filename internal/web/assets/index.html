@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Server Manager</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+
+<!-- ───────── 解锁 / 初始化 ───────── -->
+<div id="gate" class="gate hidden">
+  <div class="card">
+    <h1 id="gate-title">解锁</h1>
+    <p id="gate-hint" class="muted"></p>
+    <input id="gate-pw" type="password" placeholder="主密码" autocomplete="current-password">
+    <input id="gate-pw2" type="password" placeholder="再输一次" class="hidden" autocomplete="new-password">
+    <label class="check" id="gate-remember-wrap">
+      <input id="gate-remember" type="checkbox" checked>
+      记住主密码（AI 调用 <code>srvctl exec</code> 需要）
+    </label>
+    <button id="gate-go" class="primary wide">解锁</button>
+    <div id="gate-err" class="err"></div>
+    <div id="gate-path" class="muted small"></div>
+  </div>
+</div>
+
+<!-- ───────── 主界面 ───────── -->
+<div id="main" class="hidden">
+  <header>
+    <div class="brand">
+      <h1>服务器</h1>
+      <span id="count" class="muted"></span>
+    </div>
+    <div class="net">当前网络：<b id="ssid">—</b></div>
+    <div class="actions">
+      <button id="btn-add" class="primary">＋ 新增</button>
+      <button id="btn-test">重新检测</button>
+      <button id="btn-copy-all">复制全部给 AI</button>
+      <button id="btn-lock">锁定</button>
+      <button id="btn-quit" class="danger">退出</button>
+    </div>
+  </header>
+
+  <div class="legend">
+    <span><i class="dot green"></i>可连接</span>
+    <span><i class="dot red"></i>不可连接</span>
+    <span><i class="dot grey"></i>当前网络环境不满足</span>
+    <span><i class="dot none"></i>不检测</span>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th class="w-dot"></th>
+        <th>名称</th>
+        <th>地址</th>
+        <th>平台</th>
+        <th>分类</th>
+        <th>需要 WiFi</th>
+        <th>延迟</th>
+        <th>说明</th>
+        <th class="w-act"></th>
+      </tr>
+    </thead>
+    <tbody id="rows"></tbody>
+  </table>
+  <p id="empty" class="muted hidden">还没有记录。点「＋ 新增」开始。</p>
+</div>
+
+<!-- ───────── 编辑对话框 ───────── -->
+<dialog id="editor">
+  <form id="form" autocomplete="off">
+    <h2 id="ed-title">新增服务器</h2>
+    <div class="grid">
+      <label>名称 *<input name="name" required></label>
+      <label>地址 *<input name="host" required placeholder="10.0.1.23"></label>
+      <label>端口<input name="port" type="number" min="0" max="65535" placeholder="22"></label>
+      <label>平台
+        <select name="platform">
+          <option value="linux">Linux</option>
+          <option value="windows">Windows</option>
+        </select>
+      </label>
+      <label>用户名<input name="username"></label>
+      <label>认证方式
+        <select name="auth_mode">
+          <option value="password">密码</option>
+          <option value="key">私钥</option>
+        </select>
+      </label>
+
+      <label class="full" data-when="password">密码<input name="password" type="password" autocomplete="new-password"></label>
+      <label class="full" data-when="key">私钥<textarea name="private_key" rows="4" spellcheck="false" placeholder="-----BEGIN OPENSSH PRIVATE KEY-----"></textarea></label>
+      <label data-when="key">私钥口令<input name="passphrase" type="password" autocomplete="new-password"></label>
+
+      <label>分类<input name="category" placeholder="内网/数据库"></label>
+      <label>标签<input name="tags" placeholder="逗号分隔"></label>
+      <label>需要 WiFi<input name="required_ssid" placeholder="留空 = 不限网络"></label>
+      <label>检测策略
+        <select name="check_mode">
+          <option value="auto">检测连通性</option>
+          <option value="none">只记录不检测</option>
+        </select>
+      </label>
+
+      <label class="full">备注<textarea name="notes" rows="2"></textarea></label>
+    </div>
+
+    <div id="ed-err" class="err"></div>
+    <menu>
+      <button type="button" id="ed-delete" class="danger left">删除</button>
+      <button type="button" id="ed-cancel">取消</button>
+      <button type="button" id="ed-save" class="primary">保存</button>
+    </menu>
+  </form>
+</dialog>
+
+<div id="toast" class="toast hidden"></div>
+<script src="/app.js"></script>
+</body>
+</html>

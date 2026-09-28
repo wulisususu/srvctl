@@ -1,0 +1,142 @@
+:root {
+  --bg: #0f1115;
+  --panel: #171a21;
+  --panel-2: #1e222b;
+  --border: #2a2f3a;
+  --fg: #e6e8ec;
+  --muted: #8b93a3;
+  --accent: #3b82f6;
+  --green: #22c55e;
+  --red: #ef4444;
+  --grey: #9ca3af;
+  --none: #4b5563;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font: 14px/1.5 "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
+}
+
+.hidden { display: none !important; }
+.muted { color: var(--muted); }
+.small { font-size: 12px; }
+.left { margin-right: auto; }
+
+/* ───────── 解锁页 ───────── */
+.gate {
+  display: flex; align-items: center; justify-content: center;
+  min-height: 100vh; padding: 24px;
+}
+.card {
+  width: 380px; padding: 28px;
+  background: var(--panel); border: 1px solid var(--border); border-radius: 12px;
+}
+.card h1 { margin: 0 0 6px; font-size: 20px; }
+.card > p { margin: 0 0 18px; font-size: 13px; }
+.card input[type=password] { width: 100%; margin-bottom: 10px; }
+.check {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 13px; color: var(--muted); margin: 4px 0 18px; cursor: pointer;
+}
+.check input { width: auto; margin: 0; }
+.wide { width: 100%; }
+code { background: var(--panel-2); padding: 1px 5px; border-radius: 4px; font-size: 12px; }
+
+/* ───────── 头部 ───────── */
+header {
+  display: flex; align-items: center; gap: 20px; flex-wrap: wrap;
+  padding: 14px 20px; background: var(--panel); border-bottom: 1px solid var(--border);
+  position: sticky; top: 0; z-index: 10;
+}
+.brand { display: flex; align-items: baseline; gap: 10px; }
+.brand h1 { margin: 0; font-size: 17px; }
+.net { font-size: 13px; color: var(--muted); }
+.net b { color: var(--fg); }
+.actions { margin-left: auto; display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* ───────── 控件 ───────── */
+button {
+  padding: 7px 14px; font-size: 13px; font-family: inherit; cursor: pointer;
+  background: var(--panel-2); color: var(--fg);
+  border: 1px solid var(--border); border-radius: 7px;
+  transition: background .12s, border-color .12s;
+}
+button:hover:not(:disabled) { background: #262b36; border-color: #3a4150; }
+button:disabled { opacity: .5; cursor: default; }
+button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+button.primary:hover:not(:disabled) { background: #2f6fd8; border-color: #2f6fd8; }
+button.danger { color: #fca5a5; }
+button.danger:hover:not(:disabled) { background: #3b1d1d; border-color: #7f1d1d; }
+
+input, select, textarea {
+  padding: 7px 10px; font-size: 13px; font-family: inherit;
+  background: var(--bg); color: var(--fg);
+  border: 1px solid var(--border); border-radius: 7px; outline: none;
+}
+input:focus, select:focus, textarea:focus { border-color: var(--accent); }
+textarea { resize: vertical; font-family: Consolas, "Courier New", monospace; font-size: 12px; }
+
+/* ───────── 图例 ───────── */
+.legend {
+  display: flex; gap: 20px; flex-wrap: wrap;
+  padding: 10px 20px; font-size: 12px; color: var(--muted);
+}
+.legend span { display: flex; align-items: center; gap: 6px; }
+
+.dot {
+  display: inline-block; width: 10px; height: 10px; border-radius: 50%;
+  flex: none; vertical-align: middle;
+}
+.dot.green { background: var(--green); box-shadow: 0 0 6px rgba(34,197,94,.5); }
+.dot.red   { background: var(--red);   box-shadow: 0 0 6px rgba(239,68,68,.5); }
+.dot.grey  { background: var(--grey); }
+.dot.none  { background: transparent; border: 1px dashed var(--none); }
+.dot.unknown { background: transparent; border: 1px solid var(--none); }
+
+/* ───────── 表格 ───────── */
+table { width: 100%; border-collapse: collapse; }
+th, td { padding: 9px 12px; text-align: left; border-bottom: 1px solid var(--border); }
+th { font-size: 12px; font-weight: 600; color: var(--muted); background: var(--panel); }
+tbody tr:hover { background: var(--panel); }
+td.mono { font-family: Consolas, monospace; font-size: 13px; }
+td.name { font-weight: 500; }
+.w-dot { width: 34px; }
+.w-act { width: 190px; }
+td.act { display: flex; gap: 6px; }
+td.act button { padding: 4px 10px; font-size: 12px; }
+
+#empty { padding: 40px; text-align: center; }
+
+/* ───────── 对话框 ───────── */
+dialog {
+  padding: 0; border: 1px solid var(--border); border-radius: 12px;
+  background: var(--panel); color: var(--fg); width: min(720px, 94vw);
+}
+dialog::backdrop { background: rgba(0,0,0,.6); }
+dialog form { padding: 24px; margin: 0; }
+dialog h2 { margin: 0 0 18px; font-size: 17px; }
+.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.grid label { display: flex; flex-direction: column; gap: 5px; font-size: 12px; color: var(--muted); }
+.grid label.full { grid-column: 1 / -1; }
+.grid input, .grid select, .grid textarea { width: 100%; }
+menu {
+  display: flex; gap: 8px; justify-content: flex-end;
+  margin: 22px 0 0; padding: 0;
+}
+
+.err { color: #fca5a5; font-size: 13px; min-height: 18px; margin-top: 10px; white-space: pre-wrap; }
+
+/* ───────── Toast ───────── */
+.toast {
+  position: fixed; left: 50%; bottom: 32px; transform: translateX(-50%);
+  padding: 11px 20px; border-radius: 9px; font-size: 13px;
+  background: var(--panel-2); border: 1px solid var(--border);
+  box-shadow: 0 8px 28px rgba(0,0,0,.5); z-index: 100;
+  max-width: 80vw; white-space: pre-wrap;
+}
+.toast.ok { border-color: #14532d; background: #0f2417; }
+.toast.error { border-color: #7f1d1d; background: #2a1212; }
