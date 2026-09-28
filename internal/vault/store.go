@@ -119,6 +119,9 @@ func (s *Store) ChangePassword(oldPassword, newPassword string) error {
 }
 
 // List 返回全部记录的副本。
+//
+// 注意返回的切片**永远不是 nil**。空 vault 时如果返回 nil，JSON 会序列化成
+// null 而不是 []，前端拿到的就不是数组 —— 一个空库就能让界面崩掉。
 func (s *Store) List() ([]model.Server, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -128,7 +131,9 @@ func (s *Store) List() ([]model.Server, error) {
 	if err := s.refreshLocked(); err != nil {
 		return nil, err
 	}
-	return append([]model.Server(nil), s.servers...), nil
+	out := make([]model.Server, len(s.servers))
+	copy(out, s.servers)
+	return out, nil
 }
 
 // Get 按名称取一条记录。

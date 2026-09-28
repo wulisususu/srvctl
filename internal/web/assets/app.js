@@ -151,6 +151,13 @@ function latencyFor(srv) {
   return r.latency_ms + ' ms';
 }
 
+/* 后端理论上永远返回数组，但一个 null 就能让整个界面白屏
+   （"S.servers is not iterable"），而且会连带把"重新检测"也一起弄挂。
+   这里兜一层，UI 不该因为一个字段类型不符就整个不可用。 */
+function asArray(v) {
+  return Array.isArray(v) ? v : [];
+}
+
 /* ───────── 渲染 ───────── */
 
 function render() {
@@ -165,7 +172,7 @@ function render() {
   $('#main').classList.remove('hidden');
   $('#ssid').textContent = S.ssid || '未知（有线或无 WLAN 网卡）';
 
-  const list = [...S.servers].sort((a, b) => {
+  const list = asArray(S.servers).slice().sort((a, b) => {
     const c = (a.category || '').localeCompare(b.category || '', 'zh');
     return c !== 0 ? c : a.name.localeCompare(b.name, 'zh');
   });
@@ -311,7 +318,7 @@ function syncAuthFields() {
 
 function openEditor(name) {
   editingName = name || null;
-  const srv = name ? S.servers.find((x) => x.name === name) : null;
+  const srv = name ? asArray(S.servers).find((x) => x.name === name) : null;
   const el = formEls();
 
   $('#ed-title').textContent = srv ? '编辑：' + srv.name : '新增服务器';
