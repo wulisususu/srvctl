@@ -109,6 +109,7 @@ add 的开关：
     --port <端口>        默认 22
     --user <用户名>
     --password <密码>    与 --key-file 二选一
+    --password-stdin    从标准输入读密码（推荐，不会留在命令行/进程列表/历史里）
     --key-file <路径>    从文件读私钥
     --passphrase <口令>  私钥口令
     --platform <平台>    linux（默认）| windows
@@ -256,17 +257,12 @@ func cmdPasswd(g globals) int {
 // ---------- 记录管理 ----------
 
 func cmdAdd(g globals, args []string) int {
-	if len(args) == 0 {
-		fmt.Fprintln(os.Stderr, "用法: srvctl add <名称> --host <地址> [...]")
-		return 2
-	}
-	name := args[0]
-
 	fs := flag.NewFlagSet("add", flag.ContinueOnError)
 	host := fs.String("host", "", "主机地址")
 	port := fs.Int("port", 0, "端口，默认 22")
 	user := fs.String("user", "", "用户名")
 	password := fs.String("password", "", "密码")
+	passwordStdin := fs.Bool("password-stdin", false, "从标准输入读取密码（避免密码出现在命令行和进程列表里）")
 	keyFile := fs.String("key-file", "", "私钥文件路径")
 	passphrase := fs.String("passphrase", "", "私钥口令")
 	platform := fs.String("platform", model.PlatformLinux, "linux | windows")
@@ -275,9 +271,14 @@ func cmdAdd(g globals, args []string) int {
 	ssid := fs.String("ssid", "", "需要连接的 WiFi 名称")
 	check := fs.String("check", "", "auto | none（留空自动判断）")
 	notes := fs.String("notes", "", "备注")
-	if err := fs.Parse(args[1:]); err != nil {
+	if err := fs.Parse(reorderFlags(fs, args)); err != nil {
 		return 2
 	}
+	if fs.NArg() < 1 {
+		fmt.Fprintln(os.Stderr, "用法: srvctl add <名称> --host <地址> [...]")
+		return 2
+	}
+	name := fs.Arg(0)
 
 	st := openStore(g)
 	if err := unlockStore(st, g, true); err != nil {
@@ -314,6 +315,28 @@ func cmdAdd(g globals, args []string) int {
 		srv.AuthMode = model.AuthKey
 		srv.PrivateKey = string(raw)
 		srv.Passphrase = *passphrase
+	case *passwordStdin:
+		raw, err := io.ReadAll(os.Stdin)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "%s: 读取标准输入失败: %v\n", appName, err)
+			return 1
+		}
+		// 只去掉一个结尾换行 —— 密码内部如果本来就有换行必须保留
+		pw := strings.TrimSuffix(string(raw), "\n")
+		pw = strings.TrimSuffix(pw, "\r")
+		// 去掉开头的 BOM。
+		//
+		// 用记事本把密码存成 "UTF-8" 会带 BOM，用 PowerShell 的
+		// Process.StandardInput 转发也会带上 —— 两者都会让认证失败，而且
+		// 现象是"密码明明正确却连不上"，极难排查。以 U+FEFF 开头的密码在
+		// 现实中不存在，所以这是纯粹的编码残留，直接去掉。
+		pw = strings.TrimPrefix(pw, "\ufeff")
+		if pw == "" {
+			fmt.Fprintf(os.Stderr, "%s: 标准输入为空\n", appName)
+			return 1
+		}
+		srv.AuthMode = model.AuthPassword
+		srv.Password = pw
 	case *password != "":
 		srv.AuthMode = model.AuthPassword
 		srv.Password = *password
@@ -340,7 +363,7 @@ func cmdList(g globals, args []string) int {
 	fs := flag.NewFlagSet("list", flag.ContinueOnError)
 	asJSON := fs.Bool("json", false, "以 JSON 输出")
 	doTest := fs.Bool("test", false, "同时做连通性检测")
-	if err := fs.Parse(args); err != nil {
+	if err := fs.Parse(reorderFlags(fs, args)); err != nil {
 		return 2
 	}
 
@@ -413,7 +436,7 @@ func cmdGet(g globals, args []string) int {
 	fs := flag.NewFlagSet("get", flag.ContinueOnError)
 	asJSON := fs.Bool("json", false, "以 JSON 输出")
 	reveal := fs.Bool("reveal", false, "显示密码/私钥")
-	if err := fs.Parse(args); err != nil {
+	if err := fs.Parse(reorderFlags(fs, args)); err != nil {
 		return 2
 	}
 	if fs.NArg() < 1 {
@@ -505,7 +528,7 @@ func cmdNet() int {
 func cmdTest(g globals, args []string) int {
 	fs := flag.NewFlagSet("test", flag.ContinueOnError)
 	asJSON := fs.Bool("json", false, "以 JSON 输出")
-	if err := fs.Parse(args); err != nil {
+	if err := fs.Parse(reorderFlags(fs, args)); err != nil {
 		return 2
 	}
 

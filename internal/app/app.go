@@ -7,6 +7,7 @@ package app
 
 import (
 	"errors"
+	"flag"
 	"fmt"
 	"os"
 	"runtime/debug"
@@ -136,6 +137,48 @@ func promptPassword(label string) (string, error) {
 // 设置了这个变量时，所有需要主密码的命令都不再交互提示。
 func passwordFromEnv() string {
 	return os.Getenv("SRVCTL_PASSWORD")
+}
+
+// reorderFlags 把所有开关挪到位置参数前面。
+//
+// Go 的 flag 包遇到第一个非开关参数就停止解析，而人的书写习惯是
+// `srvctl get mybox --json` —— 这样 --json 会被当成位置参数静默忽略。
+// 先重排再交给 fs.Parse，两种写法就都能用了。
+func reorderFlags(fs *flag.FlagSet, args []string) []string {
+	flags := make([]string, 0, len(args))
+	positional := make([]string, 0, len(args))
+
+	for i := 0; i < len(args); i++ {
+		a := args[i]
+
+		if a == "--" { // 显式分隔符，后面全是位置参数
+			positional = append(positional, args[i+1:]...)
+			break
+		}
+
+		if len(a) > 1 && a[0] == '-' {
+			flags = append(flags, a)
+
+			// 非布尔开关还要把它的值一起带走
+			name := strings.TrimLeft(a, "-")
+			if !strings.Contains(name, "=") {
+				if f := fs.Lookup(name); f != nil {
+					bf, isBool := f.Value.(interface{ IsBoolFlag() bool })
+					if !isBool || !bf.IsBoolFlag() {
+						if i+1 < len(args) {
+							i++
+							flags = append(flags, args[i])
+						}
+					}
+				}
+			}
+			continue
+		}
+
+		positional = append(positional, a)
+	}
+
+	return append(flags, positional...)
 }
 
 // ---------- 终端对齐辅助 ----------
