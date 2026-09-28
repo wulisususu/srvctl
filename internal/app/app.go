@@ -120,7 +120,18 @@ func unlockStore(st *vault.Store, g globals, allowPrompt bool) error {
 func promptPassword(label string) (string, error) {
 	fd := int(os.Stdin.Fd())
 	if !term.IsTerminal(fd) {
-		return "", errors.New("标准输入不是终端，无法交互输入主密码")
+		// 报错要说清楚"在要哪个密码"以及"怎么办"。
+		// 早先这里写死了"主密码"，但 add 命令提示的是服务器密码，
+		// 管道场景下会把人带到错误的方向。
+		what := strings.TrimSpace(label)
+		what = strings.TrimSuffix(what, ":")
+		what = strings.TrimSuffix(what, "：")
+		what = strings.TrimSpace(what)
+		hint := "请改用 --password-stdin，或设置 SRVCTL_PASSWORD 环境变量"
+		if strings.Contains(what, "主密码") {
+			hint = "请先运行 `" + appName + " login`，或设置 SRVCTL_PASSWORD 环境变量"
+		}
+		return "", fmt.Errorf("标准输入不是终端，无法提示输入「%s」。%s", what, hint)
 	}
 	fmt.Fprint(os.Stderr, label)
 	b, err := term.ReadPassword(fd)
