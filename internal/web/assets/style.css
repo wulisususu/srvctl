@@ -26,6 +26,21 @@ body {
 .small { font-size: 12px; }
 .left { margin-right: auto; }
 
+/* ───────── 断线横幅 ───────── */
+.offline {
+  padding: 12px 20px;
+  background: #3b1d1d;
+  border-bottom: 1px solid #7f1d1d;
+  color: #fecaca;
+  font-size: 13px;
+  line-height: 1.6;
+}
+.offline b { color: #fff; margin-right: 6px; }
+.offline code {
+  background: #2a1212; color: #fecaca;
+  padding: 1px 5px; border-radius: 4px;
+}
+
 /* ───────── 解锁页 ───────── */
 .gate {
   display: flex; align-items: center; justify-content: center;

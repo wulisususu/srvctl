@@ -51,6 +51,7 @@ func RunGUI(g globals, open bool) (code int) {
 		Portable: g.portable,
 		Open:     open,
 		Logger:   logger,
+		LogPath:  config.LogPath(g.portable),
 	}); err != nil {
 		logger.Printf("界面异常退出: %v", err)
 		return 1

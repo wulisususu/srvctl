@@ -22,6 +22,7 @@ import (
 	"net/http"
 	"os/exec"
 	"runtime"
+	"runtime/debug"
 	"sync"
 	"time"
 
@@ -39,6 +40,7 @@ type Options struct {
 	Portable bool
 	Open     bool
 	Logger   *log.Logger
+	LogPath  string
 }
 
 // Server 是本地界面服务。
@@ -47,6 +49,7 @@ type Server struct {
 	portable bool
 	token    string
 	log      *log.Logger
+	logPath  string
 
 	mu      sync.RWMutex
 	ssid    string
@@ -80,6 +83,7 @@ func Run(opts Options) error {
 		portable: opts.Portable,
 		token:    token,
 		log:      logger,
+		logPath:  opts.LogPath,
 		ssid:     netid.SSID(),
 		results:  map[string]reach.Result{},
 		quitCh:   make(chan struct{}),
@@ -88,9 +92,21 @@ func Run(opts Options) error {
 	mux := http.NewServeMux()
 	s.routes(mux)
 	s.httpSrv = &http.Server{
-		Handler:      mux,
-		ReadTimeout:  15 * time.Second,
-		WriteTimeout: 90 * time.Second,
+		Handler: mux,
+
+		// 只限制"读请求头"的耗时，不用 ReadTimeout。
+		//
+		// 关键：http.Server 的 IdleTimeout 为 0 时会**沿用 ReadTimeout**
+		// 作为空闲连接的存活时间。原先 ReadTimeout=15s，于是浏览器
+		// keep-alive 连接空闲 15 秒就被服务端关掉；浏览器若复用这条死连接
+		// 发 POST（非幂等，不会自动重试），就会报 "Failed to fetch"。
+		ReadHeaderTimeout: 10 * time.Second,
+
+		// 空闲连接给足时间，让浏览器能安全复用。
+		IdleTimeout: 5 * time.Minute,
+
+		// /api/test 在服务器多、超时高的时候会比较久，留够余量。
+		WriteTimeout: 3 * time.Minute,
 	}
 
 	url := fmt.Sprintf("http://127.0.0.1:%d/?t=%s", port, token)
@@ -134,15 +150,62 @@ func (s *Server) routes(mux *http.ServeMux) {
 	}
 	mux.Handle("/", http.FileServer(http.FS(sub)))
 
-	mux.HandleFunc("/api/state", s.guard(s.handleState))
-	mux.HandleFunc("/api/init", s.guard(s.handleInit))
-	mux.HandleFunc("/api/unlock", s.guard(s.handleUnlock))
-	mux.HandleFunc("/api/lock", s.guard(s.handleLock))
-	mux.HandleFunc("/api/test", s.guard(s.handleTest))
-	mux.HandleFunc("/api/servers", s.guard(s.handleServers))
-	mux.HandleFunc("/api/delete", s.guard(s.handleDelete))
-	mux.HandleFunc("/api/snippet", s.guard(s.handleSnippet))
-	mux.HandleFunc("/api/quit", s.guard(s.handleQuit))
+	mux.HandleFunc("/api/ping", s.route(s.handlePing))
+	mux.HandleFunc("/api/state", s.route(s.handleState))
+	mux.HandleFunc("/api/init", s.route(s.handleInit))
+	mux.HandleFunc("/api/unlock", s.route(s.handleUnlock))
+	mux.HandleFunc("/api/lock", s.route(s.handleLock))
+	mux.HandleFunc("/api/test", s.route(s.handleTest))
+	mux.HandleFunc("/api/servers", s.route(s.handleServers))
+	mux.HandleFunc("/api/delete", s.route(s.handleDelete))
+	mux.HandleFunc("/api/snippet", s.route(s.handleSnippet))
+	mux.HandleFunc("/api/quit", s.route(s.handleQuit))
+}
+
+// route 把 panic 兜底和 token 校验串起来。
+func (s *Server) route(h http.HandlerFunc) http.HandlerFunc {
+	return s.recoverPanic(s.guard(h))
+}
+
+// trackingWriter 记录响应头是否已经写出 —— panic 兜底需要据此决定
+// 还能不能补一个 500。
+type trackingWriter struct {
+	http.ResponseWriter
+	wrote bool
+}
+
+func (t *trackingWriter) WriteHeader(code int) {
+	t.wrote = true
+	t.ResponseWriter.WriteHeader(code)
+}
+
+func (t *trackingWriter) Write(b []byte) (int, error) {
+	t.wrote = true
+	return t.ResponseWriter.Write(b)
+}
+
+// recoverPanic 把 panic 变成可以看见的错误。
+//
+// 没有它的话，handler 一旦 panic，net/http 只会静默关闭连接 —— 浏览器端
+// 表现为 "Failed to fetch"，用户拿不到任何原因，日志里也只有一行默认堆栈。
+// 有了它：日志写明哪个请求 panic 了、堆栈是什么；浏览器至少能拿到 500 和
+// 一句话；而且服务本身不会因为单个请求出错而中断。
+func (s *Server) recoverPanic(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		tw := &trackingWriter{ResponseWriter: w}
+		defer func() {
+			rec := recover()
+			if rec == nil {
+				return
+			}
+			s.log.Printf("PANIC %s %s: %v\n%s", r.Method, r.URL.Path, rec, debug.Stack())
+			if !tw.wrote {
+				writeError(tw, http.StatusInternalServerError,
+					fmt.Sprintf("服务端内部错误（已写入日志 %s）: %v", s.logPath, rec))
+			}
+		}()
+		next(tw, r)
+	}
 }
 
 // guard 校验请求头里的 token。

@@ -13,6 +13,45 @@ let S = {
 let editingName = null;
 let toastTimer = null;
 
+/* ───────── 断线检测 ─────────
+   浏览器对"请求没拿到任何响应"只会给一句 TypeError: Failed to fetch，
+   对用户完全没有指导意义。下面把它翻译成能照着做的说明。 */
+
+let offline = false;
+
+function markOffline(why) {
+  if (why) $('#offline-why').textContent = why;
+  offline = true;
+  $('#offline').classList.remove('hidden');
+}
+
+function markOnline() {
+  if (!offline) return;
+  offline = false;
+  $('#offline').classList.add('hidden');
+}
+
+const OFFLINE_HINT =
+  '请重新双击 srvctl-gui.exe，用新打开的页面继续操作。\n' +
+  '（每次启动端口和令牌都会重新生成，所以旧标签页无法继续使用）';
+
+/* 定期探活：程序退出或页面过期时主动提示，不用等用户点到保存才发现 */
+async function pollAlive() {
+  if (document.hidden) return;
+  try {
+    const res = await fetch('/api/ping', { headers: { 'X-Srvctl-Token': TOKEN } });
+    if (res.ok) {
+      markOnline();
+    } else if (res.status === 403) {
+      markOffline('页面令牌已失效 —— 程序可能重启过。');
+    } else {
+      markOffline('本地服务返回了异常状态。');
+    }
+  } catch {
+    markOffline('本地服务没有响应 —— 程序可能已退出。');
+  }
+}
+
 /* ───────── API ───────── */
 
 async function api(path, body) {
@@ -22,7 +61,23 @@ async function api(path, body) {
     opts.headers['Content-Type'] = 'application/json';
     opts.body = JSON.stringify(body);
   }
-  const res = await fetch(path, opts);
+
+  let res;
+  try {
+    res = await fetch(path, opts);
+  } catch {
+    // fetch 抛异常 = 连接层就失败了，拿不到任何 HTTP 状态码
+    markOffline('请求没有到达本地服务。');
+    throw new Error('与本地服务断开连接，请求没有发出去。\n' + OFFLINE_HINT);
+  }
+
+  if (res.status === 403) {
+    markOffline('页面令牌已失效 —— 程序可能重启过。');
+    throw new Error('页面令牌已失效。\n' + OFFLINE_HINT);
+  }
+
+  markOnline();
+
   let data = {};
   try { data = await res.json(); } catch { /* 可能没有响应体 */ }
   if (!res.ok) throw new Error(data.error || `${res.status} ${res.statusText}`);
@@ -385,8 +440,10 @@ async function init() {
     await loadState();
     if (S.unlocked) await runTest();
   } catch (e) {
-    toast('加载失败：' + e.message, 'error');
+    // 断线时 api() 已经把横幅显示出来了，这里不再叠一个 toast
+    if (!offline) toast('加载失败：' + e.message, 'error');
   }
+  setInterval(pollAlive, 4000);
 }
 
 init();

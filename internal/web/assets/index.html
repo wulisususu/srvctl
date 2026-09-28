@@ -8,6 +8,15 @@
 </head>
 <body>
 
+<!-- ───────── 断线提示 ─────────
+     浏览器对"请求没拿到任何响应"只会给一句 "Failed to fetch"，
+     对用户毫无帮助。这里在探活失败时给出可操作的说明。 -->
+<div id="offline" class="offline hidden">
+  <b>与本地服务断开连接</b>
+  <span id="offline-why">程序可能已退出，或者这个页面是上一次启动时打开的（端口和令牌每次启动都会重新生成）。</span>
+  请重新双击 <code>srvctl-gui.exe</code>，用新打开的页面继续操作。
+</div>
+
 <!-- ───────── 解锁 / 初始化 ───────── -->
 <div id="gate" class="gate hidden">
   <div class="card">

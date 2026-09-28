@@ -33,6 +33,18 @@ func decodeBody(r *http.Request, v any) error {
 
 // ---------- 状态 ----------
 
+// handlePing 供界面定期探活。
+//
+// 它同时验证了两件事：服务进程还活着，以及页面手里的 token 还有效
+// （token 每次启动都会重新生成）。界面据此在断开时给出明确提示，
+// 而不是让用户对着一句 "Failed to fetch" 猜。
+func (s *Server) handlePing(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, map[string]any{
+		"ok":       true,
+		"unlocked": s.store.Unlocked(),
+	})
+}
+
 type stateResponse struct {
 	HasVault   bool                    `json:"has_vault"`
 	Unlocked   bool                    `json:"unlocked"`

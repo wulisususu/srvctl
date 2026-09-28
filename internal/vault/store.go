@@ -310,12 +310,31 @@ func (s *Store) persistLocked() error {
 	if err := os.WriteFile(tmp, out, 0o600); err != nil {
 		return err
 	}
-	if err := os.Rename(tmp, s.path); err != nil {
+	if err := renameWithRetry(tmp, s.path); err != nil {
 		_ = os.Remove(tmp)
-		return err
+		return fmt.Errorf("写入 vault 失败: %w", err)
 	}
 	s.stampModTimeLocked()
 	return nil
+}
+
+// renameWithRetry 在 Windows 上重试 rename。
+//
+// Windows 不允许替换一个正被其他进程打开的文件。杀毒软件扫描、Windows 搜索
+// 索引、OneDrive 同步都可能在我们写到一半时短暂持有 vault 文件，导致
+// os.Rename 报 "Access is denied" —— 而这是在"保存"这个最容易被注意到的
+// 操作上，表现为保存失败。重试几次基本都能成功。
+func renameWithRetry(oldPath, newPath string) error {
+	var err error
+	delay := 20 * time.Millisecond
+	for attempt := 0; attempt < 6; attempt++ {
+		if err = os.Rename(oldPath, newPath); err == nil {
+			return nil
+		}
+		time.Sleep(delay)
+		delay *= 2
+	}
+	return err
 }
 
 func (s *Store) stampModTimeLocked() {
