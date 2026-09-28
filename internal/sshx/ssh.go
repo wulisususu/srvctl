@@ -101,7 +101,7 @@ func dial(s model.Server) (*ssh.Client, error) {
 	if err != nil {
 		return nil, err
 	}
-	return ssh.Dial("tcp", s.Address(), cfg)
+	return ssh.Dial("tcp", s.SSHAddress(), cfg)
 }
 
 // Run 在目标主机上执行一条命令。

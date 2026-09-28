@@ -33,7 +33,12 @@ func For(s model.Server, r *reach.Result, currentSSID, cmd string) string {
 	if s.Platform == model.PlatformWindows {
 		fmt.Fprintf(&b, "服务器 %s（%s，%s）已登记在 srvctl（仅登记，不检测连通性）。\n\n",
 			s.Name, platform, s.Host)
-		fmt.Fprintf(&b, "远程桌面：\n    mstsc /v:%s\n\n", s.Host)
+		// mstsc 不带端口默认走 3389；只有非默认端口才需要显式写出来
+		rdpTarget := s.Host
+		if s.Port > 0 && s.Port != model.DefaultRDPPort {
+			rdpTarget = fmt.Sprintf("%s:%d", s.Host, s.Port)
+		}
+		fmt.Fprintf(&b, "远程桌面：\n    mstsc /v:%s\n\n", rdpTarget)
 		fmt.Fprintf(&b, "如果该机已启用 OpenSSH Server，也可以用：\n    %s exec %s \"<PowerShell 命令>\"\n",
 			cmd, s.Name)
 	} else {

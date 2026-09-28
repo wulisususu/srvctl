@@ -106,7 +106,7 @@ vault：
 
 add 的开关：
     --host <地址>        必填
-    --port <端口>        默认 22
+    --port <端口>        留空按平台默认（Linux=22，Windows=3389）
     --user <用户名>
     --password <密码>    与 --key-file 二选一
     --password-stdin    从标准输入读密码（推荐，不会留在命令行/进程列表/历史里）
@@ -259,7 +259,7 @@ func cmdPasswd(g globals) int {
 func cmdAdd(g globals, args []string) int {
 	fs := flag.NewFlagSet("add", flag.ContinueOnError)
 	host := fs.String("host", "", "主机地址")
-	port := fs.Int("port", 0, "端口，默认 22")
+	port := fs.Int("port", 0, "端口，留空按平台默认（Linux=22，Windows=3389）")
 	user := fs.String("user", "", "用户名")
 	password := fs.String("password", "", "密码")
 	passwordStdin := fs.Bool("password-stdin", false, "从标准输入读取密码（避免密码出现在命令行和进程列表里）")

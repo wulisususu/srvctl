@@ -178,6 +178,14 @@ function latencyFor(srv) {
   return r.latency_ms + ' ms';
 }
 
+/* 与 Go 端 model.Server.EffectivePort() 保持一致：
+   端口留空表示"用平台默认值" —— Linux 走 SSH(22)，Windows 走 RDP(3389)。
+   不能一律按 22 处理，否则 Windows 服务器会显示成 :22，是错的。 */
+function effectivePort(srv) {
+  if (srv.port > 0) return srv.port;
+  return srv.platform === 'windows' ? 3389 : 22;
+}
+
 /* 后端理论上永远返回数组，但一个 null 就能让整个界面白屏
    （"S.servers is not iterable"），而且会连带把"重新检测"也一起弄挂。
    这里兜一层，UI 不该因为一个字段类型不符就整个不可用。 */
@@ -272,7 +280,7 @@ function render() {
         <div>${esc(s.name)}</div>
         ${s.notes ? `<div class="sub" title="${esc(s.notes)}">${esc(s.notes)}</div>` : ''}
       </td>
-      <td class="mono">${esc(s.host)}:${s.port || 22}</td>
+      <td class="mono">${esc(s.host)}:${effectivePort(s)}</td>
       <td>${s.platform === 'windows' ? 'Windows' : 'Linux'}</td>
       <td>${esc(s.category || '')}</td>
       <td>${esc(s.required_ssid || '')}</td>

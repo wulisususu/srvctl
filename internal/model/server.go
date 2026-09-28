@@ -29,6 +29,12 @@ const (
 	CheckNone = "none"
 )
 
+// 各平台主要连接方式的默认端口。
+const (
+	DefaultSSHPort = 22
+	DefaultRDPPort = 3389
+)
+
 // Server 是一条服务器记录。
 //
 // Password / PrivateKey / Passphrase 随 vault 整体加密后落盘。
@@ -49,22 +55,46 @@ type Server struct {
 	Notes        string   `json:"notes,omitempty"`
 }
 
-// EffectivePort 返回探测/连接实际使用的端口。
+// EffectivePort 返回这台机器主要连接方式所用的端口。
+//
+// 端口字段为 0 表示"用平台默认值"，而不是"22"：
+// Linux 走 SSH(22)，Windows 走 RDP(3389)。不能一律按 22 处理 ——
+// 那样一台 Windows 服务器会显示成 "1.2.3.4:22"，是错的。
 func (s Server) EffectivePort() int {
 	if s.Port > 0 {
 		return s.Port
 	}
-	return 22
+	if s.Platform == PlatformWindows {
+		return DefaultRDPPort
+	}
+	return DefaultSSHPort
+}
+
+// SSHPort 返回 SSH 连接应使用的端口。
+//
+// 与 EffectivePort 的区别：EffectivePort 表达"这台机器对外的主要服务端口"
+// （Windows 是 3389），而 SSH 无论什么平台都默认 22。执行命令走的是 SSH，
+// 所以必须用这个而不是 EffectivePort。
+func (s Server) SSHPort() int {
+	if s.Port > 0 {
+		return s.Port
+	}
+	return DefaultSSHPort
+}
+
+// Address 返回 host:port（按平台的主要连接方式）。
+func (s Server) Address() string {
+	return fmt.Sprintf("%s:%d", s.Host, s.EffectivePort())
+}
+
+// SSHAddress 返回 SSH 用的 host:port。
+func (s Server) SSHAddress() string {
+	return fmt.Sprintf("%s:%d", s.Host, s.SSHPort())
 }
 
 // Checkable 决定该条目是否进入探测队列。
 func (s Server) Checkable() bool {
 	return s.CheckMode != CheckNone && s.Host != ""
-}
-
-// Address 返回 host:port。
-func (s Server) Address() string {
-	return fmt.Sprintf("%s:%d", s.Host, s.EffectivePort())
 }
 
 // Normalize 填充默认值。
