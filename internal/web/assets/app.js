@@ -313,7 +313,12 @@ function updateGate() {
   } else {
     $('#gate-title').textContent = fresh ? '创建 vault' : '解锁';
     $('#gate-hint').textContent = fresh
-      ? '第一次运行。请设置一个主密码 —— 所有服务器信息会用 AES-256-GCM 加密后保存在本地文件里。'
+      ? '第一次运行。请设置一个主密码 —— 所有服务器信息会用 AES-256-GCM ' +
+        '加密后保存在本地文件里。\n\n' +
+        '⚠️ 如果你在另一台电脑上已经用过这个工具，先别在这里新建 ——\n' +
+        '那会生成另一个空库。它的 vault 多半在云盘目录里，用\n' +
+        '    config set-vault "<云盘里的 vault.enc 路径>"\n' +
+        '指向它，再重启本程序即可。'
       : '输入主密码以解锁。';
     $('#gate-go').textContent = fresh ? '创建' : '解锁';
   }
