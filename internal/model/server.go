@@ -105,6 +105,12 @@ func (s *Server) Normalize() {
 	s.Category = strings.TrimSpace(s.Category)
 	s.RequiredSSID = strings.TrimSpace(s.RequiredSSID)
 
+	// 备注只去掉尾部空白。
+	//
+	// 在界面上删掉最后一行很容易留下一个空行，存进 vault 后又会原样出现在
+	// 「复制给 AI」的文本里。保留行首缩进（用户可能有意排版），只清尾部。
+	s.Notes = strings.TrimRight(s.Notes, " \t\r\n")
+
 	if s.Platform == "" {
 		s.Platform = PlatformLinux
 	}

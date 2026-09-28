@@ -1,6 +1,9 @@
 package model
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func base(platform string) Server {
 	return Server{
@@ -79,5 +82,35 @@ func TestWindowsDefaultsToNoCheck(t *testing.T) {
 	l.Normalize()
 	if l.CheckMode != CheckAuto {
 		t.Errorf("Linux 条目默认应为 %q，得到 %q", CheckAuto, l.CheckMode)
+	}
+}
+
+// 备注尾部空白要去掉 —— 界面上删掉最后一行常留下空行，
+// 不清掉会一路带进「复制给 AI」的文本里。
+func TestNormalizeTrimsNotesTrailingWhitespace(t *testing.T) {
+	cases := []struct{ in, want string }{
+		{"RDP 连接时勾选「允许剪贴板」\n", "RDP 连接时勾选「允许剪贴板」"},
+		{"第一行\n第二行\n\n", "第一行\n第二行"},
+		{"  前后都有空格  ", "  前后都有空格"},
+		{"", ""},
+		{"   ", ""},
+	}
+	for _, c := range cases {
+		s := base(PlatformLinux)
+		s.Notes = c.in
+		s.Normalize()
+		if s.Notes != c.want {
+			t.Errorf("Normalize(%q) 备注 = %q, want %q", c.in, s.Notes, c.want)
+		}
+	}
+}
+
+// 行首缩进要保留 —— 用户可能有意排版（比如列表项）。
+func TestNormalizeKeepsNotesLeadingIndent(t *testing.T) {
+	s := base(PlatformLinux)
+	s.Notes = "  缩进的一行\n  另一行"
+	s.Normalize()
+	if !strings.HasPrefix(s.Notes, "  缩进的一行") {
+		t.Errorf("行首缩进被吃掉了: %q", s.Notes)
 	}
 }

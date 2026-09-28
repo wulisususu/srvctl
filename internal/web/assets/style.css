@@ -142,8 +142,14 @@ td.name .sub {
 }
 .w-dot { width: 34px; }
 .w-act { width: 190px; }
-td.act { display: flex; gap: 6px; }
+
+/* 注意：这里不能用 display:flex。
+   给 <td> 设 flex 会让它不再是 table-cell，从而脱离表格的行高计算 ——
+   表现就是这一格下面的边框和左边对不齐（只要有别的单元格更高就会露馅，
+   比如名称下面带了备注的那一行）。用 nowrap + inline-block 排按钮即可。 */
+td.act { white-space: nowrap; }
 td.act button { padding: 4px 10px; font-size: 12px; }
+td.act button + button { margin-left: 6px; }
 
 #empty { padding: 40px; text-align: center; }
 
