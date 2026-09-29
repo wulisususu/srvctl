@@ -45,15 +45,23 @@ func For(s model.Server, r *reach.Result, currentSSID, cmd string) string {
 		fmt.Fprintf(&b, "服务器 %s（%s，%s）已登记在 srvctl。\n\n",
 			s.Name, platform, s.Address())
 
+		// 说明必须"拿起来就能跑"：先给一条具体的可执行命令，而不是
+		// <命令> 占位模板 —— 否则谨慎的智能体会先回一句"请问需要我
+		// 做什么"，白烧一个来回。
+		//
 		// srvctl 不在 PATH 上时必须点明，否则 AI 看到一长串路径会
 		// 以为可以简化成 `srvctl`，一试就是 command not found。
+		//
+		// 这里不列 `shell`：它是交互式命令，AI 在非终端环境里跑不了，
+		// AI 执行任何操作都走 exec 即可。
 		if onPath {
-			fmt.Fprintf(&b, "执行命令：\n    %s exec %s \"<命令>\"\n\n", cmd, s.Name)
+			fmt.Fprintf(&b, "需要执行操作时，直接运行下面的命令，不用再问我：\n")
+			fmt.Fprintf(&b, "    %s exec %s \"uptime && df -h /\"\n\n", cmd, s.Name)
 		} else {
-			fmt.Fprintf(&b, "执行命令（srvctl 未加入 PATH，请照抄下面的完整路径，不要简写成 srvctl）：\n")
-			fmt.Fprintf(&b, "    %s exec %s \"<命令>\"\n\n", cmd, s.Name)
+			fmt.Fprintf(&b, "需要执行操作时，直接运行下面的命令，不用再问我（srvctl 未加入 PATH，请照抄完整路径，不要简写成 srvctl）：\n")
+			fmt.Fprintf(&b, "    %s exec %s \"uptime && df -h /\"\n\n", cmd, s.Name)
 		}
-		fmt.Fprintf(&b, "交互式会话：\n    %s shell %s\n\n", cmd, s.Name)
+		b.WriteString("执行其它命令时，把引号里的内容替换成实际命令即可。\n")
 		b.WriteString("凭据由 srvctl 管理，不需要也不应该向我索要密码或私钥。\n")
 	}
 
@@ -83,7 +91,7 @@ func ForAll(servers []model.Server, results map[string]reach.Result, currentSSID
 
 	var b strings.Builder
 	fmt.Fprintf(&b, "以下 %d 台服务器已登记在 srvctl（当前网络：%s）。\n", len(sorted), displaySSID(currentSSID))
-	fmt.Fprintf(&b, "用 `%s exec <名称> \"<命令>\"` 执行命令，`%s shell <名称>` 开交互式会话。\n", cmd, cmd)
+	fmt.Fprintf(&b, "用 `%s exec <名称> \"<命令>\"` 执行命令，例如 `%s exec <名称> \"uptime && df -h /\"`。\n", cmd, cmd)
 	if cmd != "srvctl" {
 		fmt.Fprintf(&b, "（srvctl 未加入 PATH，必须使用上面的完整路径。）\n")
 	}

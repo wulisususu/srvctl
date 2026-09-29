@@ -29,6 +29,23 @@ func TestForUsesBareCommandWhenOnPath(t *testing.T) {
 	}
 }
 
+// 给 AI 的说明必须"拿起来就能跑"：直接给具体命令，而不是 <命令> 占位模板，
+// 并明确不要反问 —— 否则谨慎的智能体会先回一句"请问需要我做什么"，
+// 白烧一个来回。交互式 shell 对 AI 不可执行，不该出现在说明里。
+func TestForDirectsAIToAct(t *testing.T) {
+	got := For(linuxServer(), nil, "", "srvctl")
+
+	if !strings.Contains(got, `srvctl exec prod-db-1 "uptime && df -h /"`) {
+		t.Errorf("应直接给出可执行的具体命令:\n%s", got)
+	}
+	if !strings.Contains(got, "不用再问我") {
+		t.Errorf("应明确要求直接执行、不要反问:\n%s", got)
+	}
+	if strings.Contains(got, "shell") {
+		t.Errorf("AI 说明里不该出现交互式 shell:\n%s", got)
+	}
+}
+
 // srvctl 不在 PATH 上时必须给出完整路径，并且明确告诉 AI 不要简写。
 // 否则 AI 会把长路径"优化"成 srvctl，一试就是 command not found，
 // 然后开始自己猜怎么连服务器 —— 那正是这个工具要避免的。
